@@ -2,17 +2,14 @@ import sys
 import pygame
 from os import listdir
 from os.path import isfile, join
-from button import Button
+from settings import *
 
-MainCharacters = [f for f in listdir("assets/MainCharacters") if not isfile("assets/MainCharacters" + '/' + f)]
+BackGroundImage = pygame.image.load("assets\Menu\Background.png")
+BackGroundImage = pygame.transform.scale(BackGroundImage, (WIDTH, HEIGHT))
+
 pygame.init()
 pygame.display.set_caption("Platformer")
-WIDTH, HEIGHT = 1000, 800
-FPS = 60
-PLAYER_VEL = 5
-BG = pygame.image.load("assets/Background.png")
 clock = pygame.time.Clock()
-
 window = pygame.display.set_mode((WIDTH, HEIGHT))
 
 def flip(sprites):
@@ -277,11 +274,11 @@ def handle_move(player, objects):
             pygame.mixer.music.play()
 
 def get_font(size):  # Returns Press-Start-2P in the desired size
-    return pygame.font.Font("assets/font.ttf", size)
+    return pygame.font.Font("assets/Menu/font.ttf", size)
 
 def play(level):
 
-    pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Music\level 1 theme.mp3'))
+    pygame.mixer.Channel(1).play(pygame.mixer.Sound('assets\Music\level 1 theme.mp3'))
 
     background, bg_image = get_background("blue sky.png")
 
@@ -340,7 +337,7 @@ def play(level):
 
 def levels_menu():
 
-    window.blit(BG, (0, 0))
+    window.blit(BackGroundImage, (0, 0))
 
     levels_pos = {}
 
@@ -371,7 +368,7 @@ def levels_menu():
     while True:
         OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
 
-        OPTIONS_BACK = Button(image=None, pos=(600, 650), text_input="BACK", font=get_font(75), base_color="Black", hovering_color="Green")
+        OPTIONS_BACK = Button(image=None, pos=(520, 650), text_input="BACK", font=get_font(75), base_color="Black", hovering_color="White")
         OPTIONS_BACK.changeColor(OPTIONS_MOUSE_POS)
         OPTIONS_BACK.update(window)
 
@@ -385,45 +382,16 @@ def levels_menu():
 
         pygame.display.update()
 
-def options():
-    while True:
-        OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
-
-        window.fill("white")
-
-        OPTIONS_TEXT = get_font(45).render("This is the OPTIONS screen.", True, "Black")
-        OPTIONS_RECT = OPTIONS_TEXT.get_rect(center=(640, 260))
-        window.blit(OPTIONS_TEXT, OPTIONS_RECT)
-
-        OPTIONS_BACK = Button(image=None, pos=(640, 460),
-                              text_input="BACK", font=get_font(75), base_color="Black", hovering_color="Green")
-
-        OPTIONS_BACK.changeColor(OPTIONS_MOUSE_POS)
-        OPTIONS_BACK.update(window)
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if OPTIONS_BACK.checkForInput(OPTIONS_MOUSE_POS):
-                    main_menu()
-
-        pygame.display.update()
-
 def main_menu():
 
-    window.blit(BG, (0, 0))
+    pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
 
-    MENU_TEXT = get_font(100).render("MAIN MENU", True, "#b68f40")
+    window.blit(BackGroundImage, (0, 0))
+
+    MENU_TEXT = get_font(100).render("", True, "#b68f40")
     MENU_RECT = MENU_TEXT.get_rect(center=(640, 100))
-
-    PLAY_BUTTON = Button(image=pygame.image.load("assets/Play Rect.png"), pos=(640, 250),
-                         text_input="PLAY", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
-    OPTIONS_BUTTON = Button(image=pygame.image.load("assets/Options Rect.png"), pos=(640, 400),
-                            text_input="OPTIONS", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
-    QUIT_BUTTON = Button(image=pygame.image.load("assets/Quit Rect.png"), pos=(640, 550),
-                         text_input="QUIT", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
+    PLAY_BUTTON = Button(image=None, pos=(520, 300), text_input="PLAY", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
+    QUIT_BUTTON = Button(image=None, pos=(520, 470), text_input="QUIT", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
 
     window.blit(MENU_TEXT, MENU_RECT)
 
@@ -431,7 +399,7 @@ def main_menu():
 
         MENU_MOUSE_POS = pygame.mouse.get_pos()
 
-        for button in [PLAY_BUTTON, OPTIONS_BUTTON, QUIT_BUTTON]:
+        for button in [PLAY_BUTTON, QUIT_BUTTON]:
             button.changeColor(MENU_MOUSE_POS)
             button.update(window)
 
@@ -442,8 +410,6 @@ def main_menu():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if PLAY_BUTTON.checkForInput(MENU_MOUSE_POS):
                     levels_menu()
-                if OPTIONS_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    options()
                 if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
                     pygame.quit()
                     sys.exit()
