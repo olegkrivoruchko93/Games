@@ -1,9 +1,12 @@
+import game
 from game import *
 from os.path import isfile
 
-player_level = 1
+pygame.init()
 
 pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
+
+player_level = 1
 
 if isfile('saving.txt'):
     with open('saving.txt', 'r') as f:
@@ -15,7 +18,6 @@ else:
 BackGroundImage = pygame.image.load("assets\Menu\Background.png")
 BackGroundImage = pygame.transform.scale(BackGroundImage, (WIDTH, HEIGHT))
 
-pygame.init()
 pygame.display.set_caption("Platformer")
 clock = pygame.time.Clock()
 window = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -97,7 +99,7 @@ def levels_menu():
                     if level.checkForInput(OPTIONS_MOUSE_POS):
                         if levels_pos[f'{level.x_pos}:{level.y_pos}'] <= player_level:
                             pygame.mixer.Channel(0).pause()
-                            play(levels_pos[f'{level.x_pos}:{level.y_pos}'])
+                            game.play(levels_pos[f'{level.x_pos}:{level.y_pos}'])
                         else:
                             pygame.mixer.Channel(1).play(pygame.mixer.Sound('assets\Music\8 bit uh oh sound.mp3'))
 
@@ -124,13 +126,11 @@ def main_menu():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if play_button.checkForInput(MENU_MOUSE_POS):
                     levels_menu()
                 if quit_button.checkForInput(MENU_MOUSE_POS):
                     pygame.quit()
-                    sys.exit()
 
         pygame.display.update()
 

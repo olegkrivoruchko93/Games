@@ -1,11 +1,8 @@
-import sys
 import pygame
 from os import listdir
 from os.path import isfile, join
 from settings import *
-
-BackGroundImage = pygame.image.load("assets\Menu\Background.png")
-BackGroundImage = pygame.transform.scale(BackGroundImage, (WIDTH, HEIGHT))
+from main import *
 
 pygame.init()
 pygame.display.set_caption("Platformer")
@@ -65,12 +62,15 @@ class Player(pygame.sprite.Sprite):
         self.jump_count = 0
         self.hit = False
         self.hit_count = 0
+        self.current_character = "MaskDude"
 
     def jump(self):
         self.y_vel = - 1 * 8
         self.animation_count = 0
         self.jump_count += 1
         if self.jump_count == 1:
+            if self.current_character == "VirtualGuy":
+                pygame.mixer.Channel(4).play(pygame.mixer.Sound(r'assets\Music\rocket.mp3'))
             self.fall_count = 0
 
     def move(self, dx, dy):
@@ -142,13 +142,14 @@ class Player(pygame.sprite.Sprite):
 
     def change_charecter(self, choice):
         self.SPRITES = load_sprite_sheets("MainCharacters", MainCharacters[choice - 1], 32, 32, True)
+        self.current_character = MainCharacters[choice - 1]
         if choice == 4:
             self.GRAVITY = 0.3
         else:
             self.GRAVITY = 1
 
-    def draw(self, win, offset_x):
-        win.blit(self.sprite, (self.rect.x - offset_x, self.rect.y))
+    def draw(self, win, offset_x, offset_y):
+        win.blit(self.sprite, (self.rect.x - offset_x, self.rect.y - offset_y))
 
 class Object(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, name=None):
@@ -159,13 +160,27 @@ class Object(pygame.sprite.Sprite):
         self.height = height
         self.name = name
 
-    def draw(self, win, offset_x):
-        win.blit(self.image, (self.rect.x - offset_x, self.rect.y))
+    def draw(self, win, offset_x, offset_y):
+        win.blit(self.image, (self.rect.x - offset_x, self.rect.y - offset_y))
 
 class Block(Object):
     def __init__(self, x, y, size):
         super().__init__(x, y, size, size)
         block = get_block(size)
+        self.image.blit(block, (0, 0))
+        self.mask = pygame.mask.from_surface(self.image)
+
+def get_floor(size):
+    image = pygame.image.load("floor.png").convert_alpha()
+    surface = pygame.Surface((size, size), pygame.SRCALPHA, 500)
+    rect = pygame.Rect(96, 0, size, size)
+    surface.blit(image, (0, 0), rect)
+    return pygame.transform.scale2x(surface)
+
+class Floor(Object):
+    def __init__(self, x, y, size):
+        super().__init__(x, y, size, size)
+        block = get_floor(size)
         self.image.blit(block, (0, 0))
         self.mask = pygame.mask.from_surface(self.image)
 
@@ -211,16 +226,16 @@ def get_background(name):
 
     return tiles, image
 
-def draw(window, background, bg_image, player, objects, offset_x):
+def draw(window, background, bg_image, player, objects, offset_x, offset_y):
     for tile in background:
         window.blit(bg_image, tile)
 
     for obj in objects:
-        obj.draw(window, offset_x)
+        obj.draw(window, offset_x, offset_y)
         if obj and obj.name == "fire":
             obj.loop()
 
-    player.draw(window, offset_x)
+    player.draw(window, offset_x, offset_y)
 
     pygame.display.update()
 
@@ -273,9 +288,6 @@ def handle_move(player, objects):
             pygame.mixer.music.load('assets\Music\8-bit-punch.wav')
             pygame.mixer.music.play()
 
-def get_font(size):  # Returns Press-Start-2P in the desired size
-    return pygame.font.Font("assets/Menu/font.ttf", size)
-
 def play(level):
 
     pygame.mixer.Channel(1).play(pygame.mixer.Sound('assets\Music\level 1 theme.mp3'))
@@ -290,11 +302,13 @@ def play(level):
 
     floor = [Block(i * block_size, HEIGHT - block_size, block_size)
              for i in range(-WIDTH // block_size, (WIDTH * 2) // block_size)]
-    objects = [*floor, Block(0, HEIGHT - block_size * 2, block_size),
-               Block(block_size * 3, HEIGHT - block_size * 4, block_size), fire]
+
+    objects = [*floor,Block(0, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 3, HEIGHT - block_size * 4, block_size), Block(block_size * 5, HEIGHT - block_size * 6, block_size), fire]
 
     offset_x = 0
-    scroll_area_width = 200
+    offset_y = 0
+
 
     run = True
     while run:
@@ -310,10 +324,11 @@ def play(level):
                 if event.key == pygame.K_SPACE and player.jump_count < 2:
                     player.jump()
                 if event.key == pygame.K_ESCAPE:
+                    pygame.mixer.Channel(1).pause()
+                    pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
                     levels_menu()
                 if event.key == pygame.K_1:
                     player.change_charecter(1)
-
                 if event.key == pygame.K_2:
                     player.change_charecter(2)
 
@@ -325,96 +340,16 @@ def play(level):
 
         player.loop(FPS)
         handle_move(player, objects)
-        draw(window, background, bg_image, player, objects, offset_x)
+        draw(window, background, bg_image, player, objects, offset_x, offset_y)
 
-        if ((player.rect.right - offset_x >= WIDTH - scroll_area_width) and player.x_vel > 0) or (
-                (player.rect.left - offset_x <= scroll_area_width) and player.x_vel < 0):
+        if ((player.rect.right - offset_x >= WIDTH - SCROLL_AREA_DIDTH) and player.x_vel > 0) or (
+                (player.rect.left - offset_x <= SCROLL_AREA_DIDTH) and player.x_vel < 0):
             offset_x += player.x_vel
+
+        if (((player.rect.centery - offset_y >= (HEIGHT - SCROLL_AREA_HEIGHT)) and player.y_vel > 0) or \
+                ((player.rect.centery - offset_y <= SCROLL_AREA_HEIGHT) and player.y_vel < 0)) and player.rect.bottom < (HEIGHT - block_size * 3):
+            offset_y += player.y_vel
 
 
     pygame.quit()
     quit()
-
-def levels_menu():
-
-    window.blit(BackGroundImage, (0, 0))
-
-    levels_pos = {}
-
-    for i in range(1, 51):
-        x = 70 + ((i - 1) % 10 + 1) * 80
-        y = 160 + ((i - 1) // 10) * 80
-        levels_pos[f'{x}:{y}'] = i
-
-    levels = []
-
-    for i in range(1, 51):
-        x = 70 + ((i - 1) % 10 + 1) * 80
-        y = 160 + ((i - 1) // 10) * 80
-
-        # Set the size for the image
-        DEFAULT_IMAGE_SIZE = (80, 80)
-
-        image = pygame.image.load(f"assets/Menu/Levels/{i}.png")
-        # Scale the image to your needed size
-        image = pygame.transform.scale(image, DEFAULT_IMAGE_SIZE)
-
-        level= Button(image=image, pos=(x, y), text_input="", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
-        levels.append(level)
-
-    for level in levels:
-        level.update(window)
-
-    while True:
-        OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
-
-        OPTIONS_BACK = Button(image=None, pos=(520, 650), text_input="BACK", font=get_font(75), base_color="Black", hovering_color="White")
-        OPTIONS_BACK.changeColor(OPTIONS_MOUSE_POS)
-        OPTIONS_BACK.update(window)
-
-        for event in pygame.event.get():
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if OPTIONS_BACK.checkForInput(OPTIONS_MOUSE_POS):
-                    main_menu()
-                for level in levels:
-                    if level.checkForInput(OPTIONS_MOUSE_POS):
-                        play(levels_pos[f'{level.x_pos}:{level.y_pos}'])
-
-        pygame.display.update()
-
-def main_menu():
-
-    pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
-
-    window.blit(BackGroundImage, (0, 0))
-
-    MENU_TEXT = get_font(100).render("", True, "#b68f40")
-    MENU_RECT = MENU_TEXT.get_rect(center=(640, 100))
-    PLAY_BUTTON = Button(image=None, pos=(520, 300), text_input="PLAY", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
-    QUIT_BUTTON = Button(image=None, pos=(520, 470), text_input="QUIT", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
-
-    window.blit(MENU_TEXT, MENU_RECT)
-
-    while True:
-
-        MENU_MOUSE_POS = pygame.mouse.get_pos()
-
-        for button in [PLAY_BUTTON, QUIT_BUTTON]:
-            button.changeColor(MENU_MOUSE_POS)
-            button.update(window)
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if PLAY_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    levels_menu()
-                if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
-                    pygame.quit()
-                    sys.exit()
-
-        pygame.display.update()
-
-if __name__ == "__main__":
-    main_menu()
