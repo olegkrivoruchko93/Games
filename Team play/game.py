@@ -1,21 +1,19 @@
-import pygame
-import settings
+from main import *
 from map import *
 from os import listdir
-from os.path import isfile, join
-from settings import *
-from main import *
+from os.path import join
+import settings as set
+from os.path import isfile
+
+game.CURRENT_LEVEL = 0
 
 pygame.init()
 pygame.display.set_caption("Platformer")
 clock = pygame.time.Clock()
-window = pygame.display.set_mode((WIDTH, HEIGHT))
+window = pygame.display.set_mode((set.WIDTH, set.HEIGHT))
 
 collide_left = False
 collide_right = False
-
-def flip(sprites):
-    return [pygame.transform.flip(sprite, True, False) for sprite in sprites]
 
 def load_sprite_sheets(dir1, dir2, width, height, direction=False):
     path = join("assets", dir1, dir2)
@@ -40,6 +38,130 @@ def load_sprite_sheets(dir1, dir2, width, height, direction=False):
             all_sprites[image.replace(".png", "")] = sprites
 
     return all_sprites
+
+def flip(sprites):
+    return [pygame.transform.flip(sprite, True, False) for sprite in sprites]
+
+class Object(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height, name=None):
+        super().__init__()
+        self.rect = pygame.Rect(x, y, width, height)
+        self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+        self.width = width
+        self.height = height
+        self.name = name
+
+    def draw(self, win, offset_x, offset_y):
+        if self.name == "HealthBar":
+            win.blit(self.image, (self.rect.x, self.rect.y))
+        else:
+            win.blit(self.image, (self.rect.x - offset_x, self.rect.y - offset_y))
+
+class Block(Object):
+
+    def get_block(self, size):
+        path = join("assets", "Terrain", "Terrain.png")
+        image = pygame.image.load(path).convert_alpha()
+        surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
+
+        if game.CURRENT_LEVEL <= 3:
+            rect = pygame.Rect(96, 0, size, size)
+        if game.CURRENT_LEVEL > 3 and game.CURRENT_LEVEL < 7:
+            rect = pygame.Rect(96, 64, size, size)
+        if game.CURRENT_LEVEL > 6:
+            rect = pygame.Rect(96, 128, size, size)
+
+        surface.blit(image, (0, 0), rect)
+        return pygame.transform.scale2x(surface)
+
+    def __init__(self, x, y, size):
+        super().__init__(x, y, size, size)
+        block = self.get_block(size)
+        self.image.blit(block, (0, 0))
+        self.mask = pygame.mask.from_surface(self.image)
+
+class HealthBar(Object):
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height)
+
+        path = join("assets", "MainCharacters", "health_4.png")
+        image = pygame.image.load(path).convert_alpha()
+        surface = pygame.Surface((width, height), pygame.SRCALPHA)
+        rect = pygame.Rect(0, 0, width, height)
+        surface.blit(image, (0, 0), rect)
+        self.image = image
+        self.name = "HealthBar"
+        self.image.blit(surface, (0, 0))
+        self.mask = pygame.mask.from_surface(self.image)
+
+class Finish(Object):
+    def __init__(self, x, y, size):
+        super().__init__(x, y, size, size)
+
+        path = join("assets", "Items", "Checkpoints", "End", "End (Idle).png")
+        image = pygame.image.load(path).convert_alpha()
+        surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
+        rect = pygame.Rect(0, 0, size, size)
+        surface.blit(image, (0, 0), rect)
+
+        self.name = "finish"
+        self.image.blit(surface, (0, 0))
+        self.mask = pygame.mask.from_surface(self.image)
+
+class Saw(Object):
+    ANIMATION_DELAY = 3
+
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height, "Saw")
+        self.Saw = load_sprite_sheets("Traps", "Saw", width, height)
+        self.image = self.Saw["on"][0]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.animation_count = 0
+        self.animation_name = "on"
+        self.name = "saw"
+
+    def loop(self):
+        sprites = self.Saw[self.animation_name]
+        sprite_index = (self.animation_count //
+                        self.ANIMATION_DELAY) % len(sprites)
+        self.image = sprites[sprite_index]
+        self.animation_count += 1
+
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
+
+        if self.animation_count // self.ANIMATION_DELAY > len(sprites):
+            self.animation_count = 0
+
+class Fire(Object):
+    ANIMATION_DELAY = 3
+
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height, "fire")
+        self.fire = load_sprite_sheets("Traps", "Fire", width, height)
+        self.image = self.fire["off"][0]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.animation_count = 0
+        self.animation_name = "on"
+
+    def on(self):
+        self.animation_name = "on"
+
+    def off(self):
+        self.animation_name = "off"
+
+    def loop(self):
+        sprites = self.fire[self.animation_name]
+        sprite_index = (self.animation_count //
+                        self.ANIMATION_DELAY) % len(sprites)
+        self.image = sprites[sprite_index]
+        self.animation_count += 1
+
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
+
+        if self.animation_count // self.ANIMATION_DELAY > len(sprites):
+            self.animation_count = 0
 
 class Player(pygame.sprite.Sprite):
     COLOR = (255, 0, 0)
@@ -169,8 +291,8 @@ class Player(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.sprite)
 
     def change_charecter(self, choice):
-        self.SPRITES = load_sprite_sheets("MainCharacters", MainCharacters[choice - 1], 32, 32, True)
-        self.current_character = MainCharacters[choice - 1]
+        self.SPRITES = load_sprite_sheets("MainCharacters", set.MainCharacters[choice - 1], 32, 32, True)
+        self.current_character = set.MainCharacters[choice - 1]
         if choice == 3: # VirtualGuy
             self.GRAVITY = 0.3
         else:
@@ -179,141 +301,21 @@ class Player(pygame.sprite.Sprite):
     def draw(self, win, offset_x, offset_y):
         win.blit(self.sprite, (self.rect.x - offset_x, self.rect.y - offset_y))
 
-class Object(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height, name=None):
-        super().__init__()
-        self.rect = pygame.Rect(x, y, width, height)
-        self.image = pygame.Surface((width, height), pygame.SRCALPHA)
-        self.width = width
-        self.height = height
-        self.name = name
-
-    def draw(self, win, offset_x, offset_y):
-        if self.name == "HealthBar":
-            win.blit(self.image, (self.rect.x, self.rect.y))
-        else:
-            win.blit(self.image, (self.rect.x - offset_x, self.rect.y - offset_y))
-
-def get_block(size):
-    path = join("assets", "Terrain", "Terrain.png")
-    image = pygame.image.load(path).convert_alpha()
-    surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
-
-    if settings.CURRENT_LEVEL <= 3:
-        rect = pygame.Rect(96, 0, size, size)
-    if settings.CURRENT_LEVEL > 3 and settings.CURRENT_LEVEL < 7:
-        rect = pygame.Rect(96, 64, size, size)
-    if settings.CURRENT_LEVEL > 6:
-        rect = pygame.Rect(96, 128, size, size)
-
-    surface.blit(image, (0, 0), rect)
-    return pygame.transform.scale2x(surface)
-
-class Block(Object):
-    def __init__(self, x, y, size):
-        super().__init__(x, y, size, size)
-        block = get_block(size)
-        self.image.blit(block, (0, 0))
-        self.mask = pygame.mask.from_surface(self.image)
-
-class HealthBar(Object):
-    def __init__(self, x, y, width, height):
-        super().__init__(x, y, width, height)
-
-        path = join("assets", "MainCharacters", "health_4.png")
-        image = pygame.image.load(path).convert_alpha()
-        surface = pygame.Surface((width, height), pygame.SRCALPHA)
-        rect = pygame.Rect(0, 0, width, height)
-        surface.blit(image, (0, 0), rect)
-        self.image = image
-        self.name = "HealthBar"
-        self.image.blit(surface, (0, 0))
-        self.mask = pygame.mask.from_surface(self.image)
-
-class Finish(Object):
-    def __init__(self, x, y, size):
-        super().__init__(x, y, size, size)
-
-        path = join("assets", "Items", "Checkpoints", "End", "End (Idle).png")
-        image = pygame.image.load(path).convert_alpha()
-        surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
-        rect = pygame.Rect(0, 0, size, size)
-        surface.blit(image, (0, 0), rect)
-
-        self.name = "finish"
-        self.image.blit(surface, (0, 0))
-        self.mask = pygame.mask.from_surface(self.image)
-
-class Saw(Object):
-    ANIMATION_DELAY = 3
-
-    def __init__(self, x, y, width, height):
-        super().__init__(x, y, width, height, "Saw")
-        self.Saw = load_sprite_sheets("Traps", "Saw", width, height)
-        self.image = self.Saw["on"][0]
-        self.mask = pygame.mask.from_surface(self.image)
-        self.animation_count = 0
-        self.animation_name = "on"
-        self.name = "saw"
-
-    def loop(self):
-        sprites = self.Saw[self.animation_name]
-        sprite_index = (self.animation_count //
-                        self.ANIMATION_DELAY) % len(sprites)
-        self.image = sprites[sprite_index]
-        self.animation_count += 1
-
-        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
-        self.mask = pygame.mask.from_surface(self.image)
-
-        if self.animation_count // self.ANIMATION_DELAY > len(sprites):
-            self.animation_count = 0
-
-class Fire(Object):
-    ANIMATION_DELAY = 3
-
-    def __init__(self, x, y, width, height):
-        super().__init__(x, y, width, height, "fire")
-        self.fire = load_sprite_sheets("Traps", "Fire", width, height)
-        self.image = self.fire["off"][0]
-        self.mask = pygame.mask.from_surface(self.image)
-        self.animation_count = 0
-        self.animation_name = "on"
-
-    def on(self):
-        self.animation_name = "on"
-
-    def off(self):
-        self.animation_name = "off"
-
-    def loop(self):
-        sprites = self.fire[self.animation_name]
-        sprite_index = (self.animation_count //
-                        self.ANIMATION_DELAY) % len(sprites)
-        self.image = sprites[sprite_index]
-        self.animation_count += 1
-
-        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
-        self.mask = pygame.mask.from_surface(self.image)
-
-        if self.animation_count // self.ANIMATION_DELAY > len(sprites):
-            self.animation_count = 0
-
 def get_background():
 
-    if settings.CURRENT_LEVEL <= 3:
+    if game.CURRENT_LEVEL <= 3:
         name = "blue sky.png"
-    if settings.CURRENT_LEVEL > 3 and settings.CURRENT_LEVEL < 7:
+    if game.CURRENT_LEVEL > 3 and game.CURRENT_LEVEL < 7:
         name = "pink sky.png"
-    if settings.CURRENT_LEVEL > 6:
+    if game.CURRENT_LEVEL > 6:
         name = "dusk.sky.png"
 
     image = pygame.image.load(join("assets", "Background", name))
     _, _, width, height = image.get_rect()
     tiles = []
 
-    for i in range(WIDTH // width + 1):
-        for j in range(HEIGHT // height + 1):
+    for i in range(set.WIDTH // width + 1):
+        for j in range(set.HEIGHT // height + 1):
             pos = (i * width, j * height)
             tiles.append(pos)
 
@@ -366,13 +368,13 @@ def handle_move(player, objects):
     keys = pygame.key.get_pressed()
 
     player.x_vel = 0
-    game.collide_left = collide(player, objects, -PLAYER_VEL * 2)
-    game.collide_right = collide(player, objects, PLAYER_VEL * 2)
+    game.collide_left = collide(player, objects, -set.PLAYER_VEL * 2)
+    game.collide_right = collide(player, objects, set.PLAYER_VEL * 2)
 
     if keys[pygame.K_a] and not game.collide_left:
-        player.move_left(PLAYER_VEL)
+        player.move_left(set.PLAYER_VEL)
     if keys[pygame.K_d] and not game.collide_right:
-        player.move_right(PLAYER_VEL)
+        player.move_right(set.PLAYER_VEL)
 
     vertical_collide = handle_vertical_collision(player, objects, player.y_vel)
     to_check = [game.collide_left, game.collide_right, *vertical_collide]
@@ -384,10 +386,10 @@ def handle_move(player, objects):
             pygame.mixer.music.play()
         if obj and obj.name == "finish":
 
-            if settings.CURRENT_LEVEL == settings.CURRENT_MAX_LEVEL:
-                settings.CURRENT_MAX_LEVEL += 1
+            if game.CURRENT_LEVEL == set.CURRENT_MAX_LEVEL:
+                set.CURRENT_MAX_LEVEL += 1
                 with open('saving.txt', 'w') as f:
-                    f.write(str(settings.CURRENT_LEVEL + 1 if settings.CURRENT_LEVEL + 1 <= settings.LEVELS else settings.LEVELS))
+                    f.write(str(game.CURRENT_LEVEL + 1 if game.CURRENT_LEVEL + 1 <= set.LEVELS else set.LEVELS))
             pygame.mixer.Channel(1).pause()
             pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
             levels_menu()
@@ -404,23 +406,23 @@ def play():
 
     floor = []
     floor.append(CharHealthBar)
-    for idx_y, row in enumerate(maps[settings.CURRENT_LEVEL - 1]):
+    for idx_y, row in enumerate(maps[game.CURRENT_LEVEL - 1]):
         for idx_x, block in enumerate(row):
             if block == 1:
-                floor.append(Block(idx_x * BLOCK_SIZE, HEIGHT - idx_y * BLOCK_SIZE, BLOCK_SIZE))
+                floor.append(Block(idx_x * set.BLOCK_SIZE, set.HEIGHT - idx_y * set.BLOCK_SIZE, set.BLOCK_SIZE))
             if block == 9:
-                floor.append(Finish(idx_x * BLOCK_SIZE, HEIGHT - idx_y * BLOCK_SIZE, 64))
+                floor.append(Finish(idx_x * set.BLOCK_SIZE, set.HEIGHT - idx_y * set.BLOCK_SIZE, 64))
             if block == 2:
-                fire = Fire(idx_x * BLOCK_SIZE + randrange(0, 48), HEIGHT - idx_y * BLOCK_SIZE + 32, 16, 48)
+                fire = Fire(idx_x * set.BLOCK_SIZE + randrange(0, 48), set.HEIGHT - idx_y * set.BLOCK_SIZE + 32, 16, 48)
                 floor.append(fire)
             if block == 3:
-                saw = Saw(idx_x * BLOCK_SIZE, HEIGHT - idx_y * BLOCK_SIZE + 32, 38, 304)
+                saw = Saw(idx_x * set.BLOCK_SIZE, set.HEIGHT - idx_y * set.BLOCK_SIZE + 32, 38, 304)
                 floor.append(saw)
 
 
 
-    objects = [*floor,Block(0, HEIGHT - BLOCK_SIZE * 2, BLOCK_SIZE),
-               Block(BLOCK_SIZE * 3, HEIGHT - BLOCK_SIZE * 4, BLOCK_SIZE), Block(BLOCK_SIZE * 5, HEIGHT - BLOCK_SIZE * 6, BLOCK_SIZE), fire, CharHealthBar]
+    objects = [*floor,Block(0, set.HEIGHT - set.BLOCK_SIZE * 2, set.BLOCK_SIZE),
+               Block(set.BLOCK_SIZE * 3, set.HEIGHT - set.BLOCK_SIZE * 4, set.BLOCK_SIZE), Block(set.BLOCK_SIZE * 5, set.HEIGHT - set.BLOCK_SIZE * 6, set.BLOCK_SIZE), CharHealthBar]
 
     offset_x = 0
     offset_y = 0
@@ -429,7 +431,7 @@ def play():
     run = True
     while run:
 
-        clock.tick(FPS)
+        clock.tick(set.FPS)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -450,17 +452,16 @@ def play():
                 if event.key == pygame.K_3:
                     player.change_charecter(3)
 
-        player.loop(FPS, CharHealthBar)
+        player.loop(set.FPS, CharHealthBar)
         handle_move(player, objects)
         draw(window, background, bg_image, player, objects, offset_x, offset_y)
 
-        if ((player.rect.right - offset_x >= WIDTH - SCROLL_AREA_DIDTH) and player.x_vel > 0) or (
-                (player.rect.left - offset_x <= SCROLL_AREA_DIDTH) and player.x_vel < 0):
+        if ((player.rect.right - offset_x >= set.WIDTH - set.SCROLL_AREA_WIDTH) and player.x_vel > 0) or (
+                (player.rect.left - offset_x <= set.SCROLL_AREA_WIDTH) and player.x_vel < 0):
             offset_x += player.x_vel
-        if (((player.rect.centery - offset_y >= (HEIGHT - SCROLL_AREA_HEIGHT)) and player.y_vel > 0) or \
-                ((player.rect.centery - offset_y <= SCROLL_AREA_HEIGHT) and player.y_vel < 0)) and player.rect.bottom < (HEIGHT - BLOCK_SIZE * 3):
+        if (((player.rect.centery - offset_y >= (set.HEIGHT - set.SCROLL_AREA_HEIGHT)) and player.y_vel > 0) or \
+                ((player.rect.centery - offset_y <= set.SCROLL_AREA_HEIGHT) and player.y_vel < 0)) and player.rect.bottom < (set.HEIGHT - set.BLOCK_SIZE * 3):
             offset_y += player.y_vel
-
 
     pygame.quit()
     quit()

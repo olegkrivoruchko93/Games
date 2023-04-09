@@ -1,22 +1,21 @@
 from random import *
 
-map_height = 70
-map_width  = 30
+def make_a_random_map(width, height, blocks_per_row):
 
-map = []
+    map = []
 
-for idx in range(map_height):
-    if idx == 0 or idx == 1:
-        map.append([0 if idx == 0 else 1 for x in range(map_width)])
-    else:
-        row = [0 for x in range(map_width)]
-        blocks_n = 0
-        while blocks_n < 3:
-            block_place = randint(1, map_width - 1)
-            if row[block_place] == 0:
-                row[block_place] = 1
-                blocks_n += 1
-        map.append(row)
+    for idx in range(height):
+        if idx == 0 or idx == 1:
+            map.append([0 if idx == 0 else 1 for x in range(width)])
+        else:
+            row = [0 for x in range(width)]
+            blocks_n = 0
+            while blocks_n < blocks_per_row:
+                block_place = randint(1, width - 1)
+                if row[block_place] == 0:
+                    row[block_place] = 1
+                    blocks_n += 1
+            map.append(row)
 
 maps = [
 [
@@ -456,7 +455,7 @@ maps = [
 [
 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 9, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
 [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
