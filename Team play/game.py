@@ -1,4 +1,6 @@
 import pygame
+import settings
+from map import *
 from os import listdir
 from os.path import isfile, join
 from settings import *
@@ -8,6 +10,9 @@ pygame.init()
 pygame.display.set_caption("Platformer")
 clock = pygame.time.Clock()
 window = pygame.display.set_mode((WIDTH, HEIGHT))
+
+collide_left = False
+collide_right = False
 
 def flip(sprites):
     return [pygame.transform.flip(sprite, True, False) for sprite in sprites]
@@ -36,19 +41,12 @@ def load_sprite_sheets(dir1, dir2, width, height, direction=False):
 
     return all_sprites
 
-def get_block(size):
-    path = join("assets", "Terrain", "Terrain.png")
-    image = pygame.image.load(path).convert_alpha()
-    surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
-    rect = pygame.Rect(96, 0, size, size)
-    surface.blit(image, (0, 0), rect)
-    return pygame.transform.scale2x(surface)
-
 class Player(pygame.sprite.Sprite):
     COLOR = (255, 0, 0)
     GRAVITY = 1
     SPRITES = load_sprite_sheets("MainCharacters", "MaskDude", 32, 32, True)
     ANIMATION_DELAY = 3
+
 
     def __init__(self, x, y, width, height):
         super().__init__()
@@ -63,15 +61,25 @@ class Player(pygame.sprite.Sprite):
         self.hit = False
         self.hit_count = 0
         self.current_character = "MaskDude"
+        self.health = 4
 
     def jump(self):
-        self.y_vel = - 1 * 8
-        self.animation_count = 0
-        self.jump_count += 1
-        if self.jump_count == 1:
-            if self.current_character == "VirtualGuy":
-                pygame.mixer.Channel(4).play(pygame.mixer.Sound(r'assets\Music\rocket.mp3'))
-            self.fall_count = 0
+        keys = pygame.key.get_pressed()
+
+        if self.current_character == "MaskDude":
+
+            if keys[pygame.K_a]:
+                self.x_vel = -300
+            elif keys[pygame.K_d]:
+                self.x_vel = 300
+        else:
+            self.y_vel = - 1 * 8
+            self.animation_count = 0
+            self.jump_count += 1
+            if self.jump_count == 1:
+                if self.current_character == "VirtualGuy":
+                    pygame.mixer.Channel(4).play(pygame.mixer.Sound(r'assets\Music\rocket.mp3'))
+                self.fall_count = 0
 
     def move(self, dx, dy):
         self.rect.x += dx
@@ -92,13 +100,33 @@ class Player(pygame.sprite.Sprite):
             self.direction = "right"
             self.animation_count = 0
 
-    def loop(self, fps):
+    def loop(self, fps, CharHealthBar):
+
+        if self.health > 0:
+            path = join("assets", "MainCharacters", f"health_{self.health}.png")
+            image = pygame.image.load(path).convert_alpha()
+            CharHealthBar.image = image
+
+
+        if self.health <= 0:
+            pygame.mixer.Channel(1).pause()
+            pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
+            levels_menu()
+
+        keys = pygame.key.get_pressed()
+
         self.y_vel += min(1, (self.fall_count / fps) * self.GRAVITY)
+
+        if self.current_character == "NinjaFrog" and (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]) \
+                and (game.collide_left or game.collide_right):
+            self.y_vel = -2
+
         self.move(self.x_vel, self.y_vel)
 
         if self.hit:
             self.hit_count += 1
         if self.hit_count > fps * 2:
+            self.health -= 1
             self.hit = False
             self.hit_count = 0
 
@@ -143,7 +171,7 @@ class Player(pygame.sprite.Sprite):
     def change_charecter(self, choice):
         self.SPRITES = load_sprite_sheets("MainCharacters", MainCharacters[choice - 1], 32, 32, True)
         self.current_character = MainCharacters[choice - 1]
-        if choice == 4:
+        if choice == 3: # VirtualGuy
             self.GRAVITY = 0.3
         else:
             self.GRAVITY = 1
@@ -161,7 +189,25 @@ class Object(pygame.sprite.Sprite):
         self.name = name
 
     def draw(self, win, offset_x, offset_y):
-        win.blit(self.image, (self.rect.x - offset_x, self.rect.y - offset_y))
+        if self.name == "HealthBar":
+            win.blit(self.image, (self.rect.x, self.rect.y))
+        else:
+            win.blit(self.image, (self.rect.x - offset_x, self.rect.y - offset_y))
+
+def get_block(size):
+    path = join("assets", "Terrain", "Terrain.png")
+    image = pygame.image.load(path).convert_alpha()
+    surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
+
+    if settings.CURRENT_LEVEL <= 3:
+        rect = pygame.Rect(96, 0, size, size)
+    if settings.CURRENT_LEVEL > 3 and settings.CURRENT_LEVEL < 7:
+        rect = pygame.Rect(96, 64, size, size)
+    if settings.CURRENT_LEVEL > 6:
+        rect = pygame.Rect(96, 128, size, size)
+
+    surface.blit(image, (0, 0), rect)
+    return pygame.transform.scale2x(surface)
 
 class Block(Object):
     def __init__(self, x, y, size):
@@ -170,19 +216,58 @@ class Block(Object):
         self.image.blit(block, (0, 0))
         self.mask = pygame.mask.from_surface(self.image)
 
-def get_floor(size):
-    image = pygame.image.load("floor.png").convert_alpha()
-    surface = pygame.Surface((size, size), pygame.SRCALPHA, 500)
-    rect = pygame.Rect(96, 0, size, size)
-    surface.blit(image, (0, 0), rect)
-    return pygame.transform.scale2x(surface)
+class HealthBar(Object):
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height)
 
-class Floor(Object):
+        path = join("assets", "MainCharacters", "health_4.png")
+        image = pygame.image.load(path).convert_alpha()
+        surface = pygame.Surface((width, height), pygame.SRCALPHA)
+        rect = pygame.Rect(0, 0, width, height)
+        surface.blit(image, (0, 0), rect)
+        self.image = image
+        self.name = "HealthBar"
+        self.image.blit(surface, (0, 0))
+        self.mask = pygame.mask.from_surface(self.image)
+
+class Finish(Object):
     def __init__(self, x, y, size):
         super().__init__(x, y, size, size)
-        block = get_floor(size)
-        self.image.blit(block, (0, 0))
+
+        path = join("assets", "Items", "Checkpoints", "End", "End (Idle).png")
+        image = pygame.image.load(path).convert_alpha()
+        surface = pygame.Surface((size, size), pygame.SRCALPHA, 32)
+        rect = pygame.Rect(0, 0, size, size)
+        surface.blit(image, (0, 0), rect)
+
+        self.name = "finish"
+        self.image.blit(surface, (0, 0))
         self.mask = pygame.mask.from_surface(self.image)
+
+class Saw(Object):
+    ANIMATION_DELAY = 3
+
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height, "Saw")
+        self.Saw = load_sprite_sheets("Traps", "Saw", width, height)
+        self.image = self.Saw["on"][0]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.animation_count = 0
+        self.animation_name = "on"
+        self.name = "saw"
+
+    def loop(self):
+        sprites = self.Saw[self.animation_name]
+        sprite_index = (self.animation_count //
+                        self.ANIMATION_DELAY) % len(sprites)
+        self.image = sprites[sprite_index]
+        self.animation_count += 1
+
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
+
+        if self.animation_count // self.ANIMATION_DELAY > len(sprites):
+            self.animation_count = 0
 
 class Fire(Object):
     ANIMATION_DELAY = 3
@@ -214,7 +299,15 @@ class Fire(Object):
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.animation_count = 0
 
-def get_background(name):
+def get_background():
+
+    if settings.CURRENT_LEVEL <= 3:
+        name = "blue sky.png"
+    if settings.CURRENT_LEVEL > 3 and settings.CURRENT_LEVEL < 7:
+        name = "pink sky.png"
+    if settings.CURRENT_LEVEL > 6:
+        name = "dusk.sky.png"
+
     image = pygame.image.load(join("assets", "Background", name))
     _, _, width, height = image.get_rect()
     tiles = []
@@ -227,12 +320,13 @@ def get_background(name):
     return tiles, image
 
 def draw(window, background, bg_image, player, objects, offset_x, offset_y):
+
     for tile in background:
         window.blit(bg_image, tile)
 
     for obj in objects:
         obj.draw(window, offset_x, offset_y)
-        if obj and obj.name == "fire":
+        if obj.name == "fire" or obj.name == "saw":
             obj.loop()
 
     player.draw(window, offset_x, offset_y)
@@ -243,14 +337,15 @@ def handle_vertical_collision(player, objects, dy):
     collided_objects = []
     for obj in objects:
         if pygame.sprite.collide_mask(player, obj):
+            if obj.name == "HealthBar":
+                continue
             if dy > 0:
                 player.rect.bottom = obj.rect.top
                 player.landed()
             elif dy < 0:
                 player.rect.top = obj.rect.bottom
                 player.hit_head()
-
-            collided_objects.append(obj)
+                collided_objects.append(obj)
 
     return collided_objects
 
@@ -259,7 +354,7 @@ def collide(player, objects, dx):
     player.update()
     collided_object = None
     for obj in objects:
-        if pygame.sprite.collide_mask(player, obj):
+        if pygame.sprite.collide_mask(player, obj) and obj.name != "HealthBar":
             collided_object = obj
             break
 
@@ -271,40 +366,61 @@ def handle_move(player, objects):
     keys = pygame.key.get_pressed()
 
     player.x_vel = 0
-    collide_left = collide(player, objects, -PLAYER_VEL * 2)
-    collide_right = collide(player, objects, PLAYER_VEL * 2)
+    game.collide_left = collide(player, objects, -PLAYER_VEL * 2)
+    game.collide_right = collide(player, objects, PLAYER_VEL * 2)
 
-    if keys[pygame.K_a] and not collide_left:
+    if keys[pygame.K_a] and not game.collide_left:
         player.move_left(PLAYER_VEL)
-    if keys[pygame.K_d] and not collide_right:
+    if keys[pygame.K_d] and not game.collide_right:
         player.move_right(PLAYER_VEL)
 
     vertical_collide = handle_vertical_collision(player, objects, player.y_vel)
-    to_check = [collide_left, collide_right, *vertical_collide]
+    to_check = [game.collide_left, game.collide_right, *vertical_collide]
 
     for obj in to_check:
-        if obj and obj.name == "fire":
+        if obj and (obj.name == "fire" or obj.name == "saw"):
             player.make_hit()
             pygame.mixer.music.load('assets\Music\8-bit-punch.wav')
             pygame.mixer.music.play()
+        if obj and obj.name == "finish":
 
-def play(level):
+            if settings.CURRENT_LEVEL == settings.CURRENT_MAX_LEVEL:
+                settings.CURRENT_MAX_LEVEL += 1
+                with open('saving.txt', 'w') as f:
+                    f.write(str(settings.CURRENT_LEVEL + 1 if settings.CURRENT_LEVEL + 1 <= settings.LEVELS else settings.LEVELS))
+            pygame.mixer.Channel(1).pause()
+            pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
+            levels_menu()
+
+def play():
 
     pygame.mixer.Channel(1).play(pygame.mixer.Sound('assets\Music\level 1 theme.mp3'))
 
-    background, bg_image = get_background("blue sky.png")
-
-    block_size = 96
+    background, bg_image = get_background()
 
     player = Player(100, 100, 50, 50)
 
-    fire = Fire(100, HEIGHT - block_size - 64, 16, 32)
+    CharHealthBar = HealthBar(0, 0, 300, 40)
 
-    floor = [Block(i * block_size, HEIGHT - block_size, block_size)
-             for i in range(-WIDTH // block_size, (WIDTH * 2) // block_size)]
+    floor = []
+    floor.append(CharHealthBar)
+    for idx_y, row in enumerate(maps[settings.CURRENT_LEVEL - 1]):
+        for idx_x, block in enumerate(row):
+            if block == 1:
+                floor.append(Block(idx_x * BLOCK_SIZE, HEIGHT - idx_y * BLOCK_SIZE, BLOCK_SIZE))
+            if block == 9:
+                floor.append(Finish(idx_x * BLOCK_SIZE, HEIGHT - idx_y * BLOCK_SIZE, 64))
+            if block == 2:
+                fire = Fire(idx_x * BLOCK_SIZE + randrange(0, 48), HEIGHT - idx_y * BLOCK_SIZE + 32, 16, 48)
+                floor.append(fire)
+            if block == 3:
+                saw = Saw(idx_x * BLOCK_SIZE, HEIGHT - idx_y * BLOCK_SIZE + 32, 38, 304)
+                floor.append(saw)
 
-    objects = [*floor,Block(0, HEIGHT - block_size * 2, block_size),
-               Block(block_size * 3, HEIGHT - block_size * 4, block_size), Block(block_size * 5, HEIGHT - block_size * 6, block_size), fire]
+
+
+    objects = [*floor,Block(0, HEIGHT - BLOCK_SIZE * 2, BLOCK_SIZE),
+               Block(BLOCK_SIZE * 3, HEIGHT - BLOCK_SIZE * 4, BLOCK_SIZE), Block(BLOCK_SIZE * 5, HEIGHT - BLOCK_SIZE * 6, BLOCK_SIZE), fire, CharHealthBar]
 
     offset_x = 0
     offset_y = 0
@@ -331,23 +447,18 @@ def play(level):
                     player.change_charecter(1)
                 if event.key == pygame.K_2:
                     player.change_charecter(2)
-
                 if event.key == pygame.K_3:
                     player.change_charecter(3)
 
-                if event.key == pygame.K_4:
-                    player.change_charecter(4)
-
-        player.loop(FPS)
+        player.loop(FPS, CharHealthBar)
         handle_move(player, objects)
         draw(window, background, bg_image, player, objects, offset_x, offset_y)
 
         if ((player.rect.right - offset_x >= WIDTH - SCROLL_AREA_DIDTH) and player.x_vel > 0) or (
                 (player.rect.left - offset_x <= SCROLL_AREA_DIDTH) and player.x_vel < 0):
             offset_x += player.x_vel
-
         if (((player.rect.centery - offset_y >= (HEIGHT - SCROLL_AREA_HEIGHT)) and player.y_vel > 0) or \
-                ((player.rect.centery - offset_y <= SCROLL_AREA_HEIGHT) and player.y_vel < 0)) and player.rect.bottom < (HEIGHT - block_size * 3):
+                ((player.rect.centery - offset_y <= SCROLL_AREA_HEIGHT) and player.y_vel < 0)) and player.rect.bottom < (HEIGHT - BLOCK_SIZE * 3):
             offset_y += player.y_vel
 
 

@@ -1,19 +1,10 @@
 import game
+import settings
 from game import *
-from os.path import isfile
 
 pygame.init()
 
 pygame.mixer.Channel(0).play(pygame.mixer.Sound('assets\Menu\menu.mp3'))
-
-player_level = 1
-
-if isfile('saving.txt'):
-    with open('saving.txt', 'r') as f:
-        player_level = int(f.readline().strip("\n"))
-else:
-    with open('saving.txt', 'w') as f:
-        f.write("1")
 
 BackGroundImage = pygame.image.load("assets\Menu\Background.png")
 BackGroundImage = pygame.transform.scale(BackGroundImage, (WIDTH, HEIGHT))
@@ -62,19 +53,19 @@ def levels_menu():
     levels_pos = {}
 
     for i in range(1, LEVELS + 1):
-        x = 50 + ((i - 1) % 5 + 1) * 160
-        y = 160 + ((i - 1) // 5) * 160
+        x = 10 + ((i - 1) % 3 + 1) * 260
+        y = 160 + ((i - 1) // 3) * 200
         levels_pos[f'{x}:{y}'] = i
 
     levels = []
 
     for i in range(1, LEVELS + 1):
-        x = 50 + ((i - 1) % 5 + 1) * 160
-        y = 160 + ((i - 1) // 5) * 160
+        x = 10 + ((i - 1) % 3 + 1) * 260
+        y = 160 + ((i - 1) // 3) * 200
 
         # Set the size for the image
         DEFAULT_IMAGE_SIZE = (100, 100)
-        image = pygame.image.load(f"assets/Menu/Levels/{i}_off.png" if i > player_level else f"assets/Menu/Levels/{i}.png")
+        image = pygame.image.load(f"assets/Menu/Levels/{i}_off.png" if i > settings.CURRENT_MAX_LEVEL else f"assets/Menu/Levels/{i}.png")
         image = pygame.transform.scale(image, DEFAULT_IMAGE_SIZE)
 
         level= Button(image=image, pos=(x, y), text_input="", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
@@ -87,7 +78,7 @@ def levels_menu():
 
         OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
 
-        OPTIONS_BACK = Button(image=None, pos=(520, 650), text_input="BACK", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
+        OPTIONS_BACK = Button(image=None, pos=(520, 725), text_input="BACK", font=get_font(75), base_color="#d7fcd4", hovering_color="White")
         OPTIONS_BACK.changeColor(OPTIONS_MOUSE_POS)
         OPTIONS_BACK.update(window)
 
@@ -97,9 +88,10 @@ def levels_menu():
                     main_menu()
                 for level in levels:
                     if level.checkForInput(OPTIONS_MOUSE_POS):
-                        if levels_pos[f'{level.x_pos}:{level.y_pos}'] <= player_level:
+                        if levels_pos[f'{level.x_pos}:{level.y_pos}'] <= settings.CURRENT_MAX_LEVEL:
+                            settings.CURRENT_LEVEL = levels_pos[f'{level.x_pos}:{level.y_pos}']
                             pygame.mixer.Channel(0).pause()
-                            game.play(levels_pos[f'{level.x_pos}:{level.y_pos}'])
+                            game.play()
                         else:
                             pygame.mixer.Channel(1).play(pygame.mixer.Sound('assets\Music\8 bit uh oh sound.mp3'))
 
